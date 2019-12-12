@@ -2,10 +2,10 @@
   "name": "tradeshift-challenge",
   "version": "1.0.0",
   "description": "challenge for tradeshift",
-  "main": "dist/index.js",
+  "main": "dist/src/index.js",
   "scripts": {
     "test": "mocha -r ts-node/register tests/**/*.test.ts",
-    "start": "node dist/index.js",
+    "start": "node dist/src/index.js",
     "dev": "nodemon src/index.ts",
     "dev:debug": "nodemon --inspect src/index.ts",
     "docker-debug": "docker-compose up",
