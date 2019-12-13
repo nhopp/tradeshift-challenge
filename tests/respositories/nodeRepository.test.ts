@@ -1,17 +1,43 @@
 import chai from 'chai';
+import { Mockgoose } from 'mock-mongoose';
+import mongoose from 'mongoose';
 
-import { InvalidNodeError, InvalidStructureError, NotFoundError } from '../../src/errors';
+import { InvalidStructureError, NotFoundError } from '../../src/errors';
 import { NodeRepository } from '../../src/respositories/nodeRepository';
 
 const expect = chai.expect;
 
 describe('NodeRepository', () => {
+  const mockgoose = new Mockgoose(mongoose);
+
+  before(async () => {
+    await mockgoose.prepareStorage();
+    await mongoose.connect('mongodb://localhost/express-mongo', {
+      useNewUrlParser: true,
+      useUnifiedTopology: true
+    });
+  });
+
+  after(async () => {
+    await mongoose.connection.close();
+  });
+
+  afterEach((done) => {
+    mockgoose.helper.reset().then(() => {
+      done();
+    });
+  });
+
   describe('addNode()', () => {
     it('without parentId creates node with parent=undefined', async () => {
       const repository = new NodeRepository();
       const node = await repository.addNode();
 
-      expect(node.parent).to.eq(undefined);
+      expect(node).to.deep.eq({
+        id: node.id,
+        parent: undefined,
+        children: []
+      });
     });
 
     it('with parentId creates node with parent=parentId', async () => {
@@ -19,7 +45,11 @@ describe('NodeRepository', () => {
       const rootNode = await repository.addNode();
       const childNode = await repository.addNode(rootNode.id);
 
-      expect(childNode.parent).to.deep.eq(rootNode.id);
+      expect(childNode).to.deep.eq({
+        id: childNode.id,
+        parent: rootNode.id,
+        children: []
+      });
     });
 
     it('with valid parentId adds new node as child of parent', async () => {
@@ -27,13 +57,13 @@ describe('NodeRepository', () => {
       const rootNode = await repository.addNode();
       const childNode = await repository.addNode(rootNode.id);
 
-      expect(rootNode).to.deep.eq({
+      const newRootNode = await repository.getNode(rootNode.id);
+
+      expect(newRootNode).to.deep.eq({
         id: rootNode.id,
         parent: undefined,
         children: [childNode.id]
       });
-
-      expect(rootNode.children.includes(childNode.id)).is.eq(true);
     });
 
     it('add node with invalid parentId promise rejects with InvalidNodeError', async () => {
@@ -42,7 +72,7 @@ describe('NodeRepository', () => {
         .addNode('invalidKey')
         .catch((err) => err);
 
-      expect(addNodeError).to.be.an.instanceof(InvalidNodeError);
+      expect(addNodeError).to.be.an.instanceof(NotFoundError);
     });
   });
 
@@ -64,7 +94,7 @@ describe('NodeRepository', () => {
   describe('getCount', () => {
     it('empty nodes return 0 count', async () => {
       const repository = new NodeRepository();
-      const count = await repository.getCount();
+      const count = await repository.getNodeCount();
 
       expect(count).to.be.eq(0);
     });
@@ -72,26 +102,9 @@ describe('NodeRepository', () => {
     it('singe node return 1 count', async () => {
       const repository = new NodeRepository();
       repository.addNode();
-      const count = await repository.getCount();
+      const count = await repository.getNodeCount();
 
       expect(count).to.be.eq(1);
-    });
-  });
-
-  describe('getRoot', () => {
-    it('no root created rejects with InvalidNodeError', async () => {
-      const repository = new NodeRepository();
-      const error = await repository.getRoot().catch((err) => err);
-
-      expect(error).to.be.an.instanceof(InvalidNodeError);
-    });
-
-    it('get the created root ', async () => {
-      const repository = new NodeRepository();
-      const addedNode = await repository.addNode();
-      const rootNode = await repository.getRoot();
-
-      expect(rootNode).to.deep.eq(addedNode);
     });
   });
 

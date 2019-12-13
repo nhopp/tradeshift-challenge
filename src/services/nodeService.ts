@@ -12,8 +12,10 @@ export class NodeService {
    * @returns information aobut the node that was aadded.
    */
   public async addNode(parentId?: string): Promise<NodeInfo> {
-    if (parentId === undefined && (await this.repository.getCount()) > 0) {
-      return Promise.reject(new DuplicateRootError());
+    if (parentId === undefined && (await this.repository.getNodeCount()) > 0) {
+      return Promise.reject(
+        new DuplicateRootError('cannot create multiple roots')
+      );
     }
 
     const node = await this.repository.addNode(parentId);

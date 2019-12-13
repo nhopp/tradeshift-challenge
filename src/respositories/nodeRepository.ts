@@ -1,22 +1,41 @@
-import uuid from 'uuid';
+import mongoose from 'mongoose';
 
 import { Node } from '../../src/models/node';
-import { InvalidNodeError, InvalidStructureError, NotFoundError } from '../errors';
+import { InvalidStructureError, NotFoundError } from '../errors';
 
-const uuidV4 = uuid.v4;
-
-class NodeRow {
-  public readonly id: string;
-  public readonly parent: string;
-
-  constructor(id: string, parent: string) {
-    this.id = id;
-    this.parent = parent;
-  }
+interface INodeModel extends mongoose.Document {
+  parent: mongoose.Types.ObjectId | undefined;
+  children: mongoose.Types.ObjectId[];
 }
 
+/**
+ * Schema for the Node model.
+ * Keeping the list of children in Node model increases the speed of getting
+ * the descendants for a given node.
+ */
+const NodeModelSchema = new mongoose.Schema({
+  parent: {
+    type: mongoose.Schema.Types.ObjectId,
+    required: false
+  },
+  children: {
+    type: [mongoose.Schema.Types.ObjectId],
+    required: true
+  }
+});
+
+const NodeModel = mongoose.model<INodeModel>('nodeModel', NodeModelSchema);
+
 export class NodeRepository {
-  private nodes: Map<string, Node> = new Map<string, Node>();
+  constructor() {
+    // mongoose
+    //   // .connect('mongodb://mongo/express-mongo', {
+    //   .connect('mongodb://localhost/express-mongo', {
+    //     useNewUrlParser: true
+    //   })
+    //   .then(() => console.log('MongoDB Connected'))
+    //   .catch((err) => console.log(err));
+  }
 
   /**
    * Add a node as a child of parentId.
@@ -24,19 +43,38 @@ export class NodeRepository {
    * root node
    */
   public async addNode(parentId?: string): Promise<Node> {
-    const node = new Node(uuidV4(), parentId, []);
-
-    if (parentId !== undefined) {
+    // const session = await mongoose.startSession();
+    // session.startTransaction();
+    try {
+      let mongoNode;
       try {
-        const parentNode = await this.getNode(parentId);
-        parentNode.children.push(node.id);
+        mongoNode = await NodeModel.create({
+          parent: parentId,
+          children: []
+        });
       } catch (err) {
-        return Promise.reject(new InvalidNodeError(`nodeId=${parentId}`));
+        return Promise.reject(
+          new NotFoundError(`parent node id not found ${parentId}`)
+        );
       }
-    }
 
-    this.nodes.set(node.id, node);
-    return Promise.resolve(node);
+      if (parentId !== undefined) {
+        const mongoParentNode = await NodeModel.findById(parentId);
+        if (mongoParentNode === null) {
+          return Promise.reject(new NotFoundError(parentId));
+        }
+
+        mongoParentNode.children.push(mongoNode._id);
+        await mongoParentNode.save();
+      }
+
+      const node = this.mongoNodeToNode(mongoNode);
+      return node;
+    } catch (err) {
+      // await session.abortTransaction();
+      // session.endSession();
+      throw err;
+    }
   }
 
   /**
@@ -45,57 +83,83 @@ export class NodeRepository {
    * @return The node or undefined if no node is found.
    */
   public async getNode(id: string): Promise<Node> {
-    const node = this.nodes.get(id);
-    if (node === undefined) {
-      return Promise.reject(new NotFoundError(`${id} was not found`));
-    }
+    const mongoNode = await this.findNodeByIdOrReject(id);
 
-    return Promise.resolve(node as Node);
+    return this.mongoNodeToNode(mongoNode);
   }
 
-  public async getRoot(): Promise<Node> {
-    const node = Array.from(this.nodes.values()).find(
-      (value) => value.parent === undefined
-    );
-
-    if (node === undefined) {
-      return Promise.reject(new InvalidNodeError());
-    }
-
-    return Promise.resolve(node);
-  }
-
-  public async getCount(): Promise<number> {
-    return Promise.resolve(this.nodes.size);
+  public async getNodeCount(): Promise<number> {
+    return await NodeModel.countDocuments();
   }
 
   public async setParent(nodeId: string, parentId: string): Promise<Node> {
-    const oldNode = await this.getNode(nodeId);
-    if (oldNode.parent === undefined) {
-      return Promise.reject(new InvalidStructureError());
+    // const session = await mongoose.startSession();
+    // session.startTransaction();
+    try {
+      const mongoNode = await this.findNodeByIdOrReject(nodeId);
+      if (mongoNode.parent === undefined) {
+        return Promise.reject(
+          new InvalidStructureError(`node=${nodeId} is the root`)
+        );
+      }
+
+      // Remove nodeId from the old parent's children
+      const mongoOldParent = await this.findNodeByIdOrReject(
+        mongoNode.parent.toHexString()
+      );
+      mongoOldParent.children = mongoOldParent.children.filter((childId) => {
+        return !childId.equals(mongoNode._id);
+      });
+      await mongoOldParent.save();
+
+      // Add nodeId to the new parent's children
+      const newParent = await this.findNodeByIdOrReject(parentId);
+      newParent.children.push(mongoNode._id);
+      await newParent.save();
+
+      // Update parent of nodeId
+      mongoNode.parent = newParent._id;
+      await mongoNode.save();
+
+      const node = this.mongoNodeToNode(mongoNode);
+      return node;
+    } catch (err) {
+      // await session.abortTransaction();
+      // session.endSession();
+      throw err;
     }
-    // Remove nodeId from the old parent's children
-    const oldParent = await this.getNode(oldNode.parent);
-    this.nodes.set(
-      oldNode.parent,
-      new Node(
-        oldParent.id,
-        oldParent.parent,
-        oldParent.children.filter((child) => child !== nodeId)
-      )
+  }
+
+  /**
+   * Wrappere around Model.findById which will reject if no matching id is found
+   * instead of returing null.
+   * @param id
+   */
+  private async findNodeByIdOrReject(id: string): Promise<INodeModel> {
+    let objectId;
+    try {
+      objectId = mongoose.Types.ObjectId(id);
+    } catch (err) {
+      return Promise.reject(new NotFoundError(`id is invalid: ${id}`));
+    }
+
+    const mongoNode = await NodeModel.findById(objectId);
+    if (mongoNode === null) {
+      return Promise.reject(new NotFoundError(id));
+    }
+
+    return mongoNode;
+  }
+
+  /**
+   * Conveert the mongoose INodeModel item to an storage agnostic object Node.
+   * @param mongoNode
+   */
+  private mongoNodeToNode(mongoNode: INodeModel): Node {
+    return new Node(
+      mongoNode._id.toHexString(),
+      mongoNode.parent ? mongoNode.parent.toHexString() : undefined,
+      Array.from(mongoNode.children).map((childId) => childId.toHexString())
     );
-
-    // Update parent of nodeId
-    const newNode = new Node(nodeId, parentId, oldNode.children);
-    this.nodes.set(newNode.id, newNode);
-
-    // Add nodeId to the new parent's children
-    const newParent = await this.getNode(parentId);
-    this.nodes.set(
-      parentId,
-      new Node(parentId, newParent.parent, newParent.children.concat([nodeId]))
-    );
-
-    return newNode;
   }
 }
