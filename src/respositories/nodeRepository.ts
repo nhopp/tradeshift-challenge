@@ -3,6 +3,9 @@ import mongoose from 'mongoose';
 import { Node } from '../../src/models/node';
 import { InvalidStructureError, NotFoundError } from '../errors';
 
+/**
+ * Interface for the NodeModel document stored in MongoDB.
+ */
 interface INodeModel extends mongoose.Document {
   parent: mongoose.Types.ObjectId | undefined;
   children: mongoose.Types.ObjectId[];
@@ -26,25 +29,18 @@ const NodeModelSchema = new mongoose.Schema({
 
 const NodeModel = mongoose.model<INodeModel>('nodeModel', NodeModelSchema);
 
+/**
+ * Abstraction above the MongoDB storage.
+ */
 export class NodeRepository {
-  constructor() {
-    // mongoose
-    //   // .connect('mongodb://mongo/express-mongo', {
-    //   .connect('mongodb://localhost/express-mongo', {
-    //     useNewUrlParser: true
-    //   })
-    //   .then(() => console.log('MongoDB Connected'))
-    //   .catch((err) => console.log(err));
-  }
-
   /**
    * Add a node as a child of parentId.
    * @param parentId the parentId to the new node as a child of. If undefined the new node is a
    * root node
    */
   public async addNode(parentId?: string): Promise<Node> {
-    // const session = await mongoose.startSession();
-    // session.startTransaction();
+    const session = await mongoose.startSession();
+    session.startTransaction();
     try {
       let mongoNode;
       try {
@@ -71,8 +67,8 @@ export class NodeRepository {
       const node = this.mongoNodeToNode(mongoNode);
       return node;
     } catch (err) {
-      // await session.abortTransaction();
-      // session.endSession();
+      await session.abortTransaction();
+      session.endSession();
       throw err;
     }
   }
@@ -88,13 +84,27 @@ export class NodeRepository {
     return this.mongoNodeToNode(mongoNode);
   }
 
+  /**
+   * Get the current number of nodes.
+   */
   public async getNodeCount(): Promise<number> {
     return await NodeModel.countDocuments();
   }
 
+  // TODO - Support setting the parent of a leaf node to undefined. The leaf node would
+  //        become the new root and the old root would have the new root as it's parent.
+
+  // TODO - Move this method out to NodeService once transactions are supported on NodeRepository.
+  //        Without transaction support by NodeRepository the rollback on failure is not feasible.
+
+  /**
+   * Set the parent of nodeId to parentId.
+   * @param nodeId
+   * @param parentId
+   */
   public async setParent(nodeId: string, parentId: string): Promise<Node> {
-    // const session = await mongoose.startSession();
-    // session.startTransaction();
+    const session = await mongoose.startSession();
+    session.startTransaction();
     try {
       const mongoNode = await this.findNodeByIdOrReject(nodeId);
       if (mongoNode.parent === undefined) {
@@ -124,8 +134,8 @@ export class NodeRepository {
       const node = this.mongoNodeToNode(mongoNode);
       return node;
     } catch (err) {
-      // await session.abortTransaction();
-      // session.endSession();
+      await session.abortTransaction();
+      session.endSession();
       throw err;
     }
   }
@@ -145,7 +155,7 @@ export class NodeRepository {
 
     const mongoNode = await NodeModel.findById(objectId);
     if (mongoNode === null) {
-      return Promise.reject(new NotFoundError(id));
+      return Promise.reject(new NotFoundError(`cannot find node=${id}`));
     }
 
     return mongoNode;

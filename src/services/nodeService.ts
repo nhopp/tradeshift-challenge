@@ -31,6 +31,9 @@ export class NodeService {
   public async getDescendants(id: string): Promise<NodeInfo[]> {
     const descendants: NodeInfo[] = [];
 
+    // TODO - This implementation is not safe for concurrent actions from different instances. Support can be added
+    //        for this by implementing a version check on each nodeInfo object, mismatching versions would trigger
+    //        a retry.
     const node = await this.repository.getNode(id);
     const queue: string[] = [];
     queue.push(...node.children);
@@ -44,9 +47,6 @@ export class NodeService {
 
     return descendants;
   }
-
-  // TODO - Support setting the parent of a leaf node to undefined. The leaf node would
-  //        become the new root and the old root would have the new root as it's parent.
 
   /**
    * Set a new parent for an existing node.

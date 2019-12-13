@@ -99,9 +99,9 @@ describe('NodeRepository', () => {
       expect(count).to.be.eq(0);
     });
 
-    it('singe node return 1 count', async () => {
+    it('single node return 1 count', async () => {
       const repository = new NodeRepository();
-      repository.addNode();
+      await repository.addNode();
       const count = await repository.getNodeCount();
 
       expect(count).to.be.eq(1);
