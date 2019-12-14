@@ -35,14 +35,25 @@ export class NodeService {
     //        for this by implementing a version check on each nodeInfo object, mismatching versions would trigger
     //        a retry.
     const node = await this.repository.getNode(id);
-    const queue: string[] = [];
-    queue.push(...node.children);
+    const nodeInfo = await this.getNodeInfo(node);
+    const queue: Array<{ id: string; depth: number }> = [];
+    queue.push(...this.mapIdsToIdsWithDepth(node.children, nodeInfo.depth + 1));
     while (queue.length > 0) {
-      const queuedId = queue.shift() as string;
-      const queuedNode = await this.repository.getNode(queuedId);
-      const nodeInfo = await this.getNodeInfo(queuedNode);
-      descendants.push(nodeInfo);
-      queue.push(...queuedNode.children);
+      const queued = queue.shift() as { id: string; depth: number };
+      const queuedNode = await this.repository.getNode(queued.id);
+      const queuedNodeInfo = new NodeInfo(
+        queuedNode.id,
+        queuedNode.parent,
+        queued.depth,
+        nodeInfo.root
+      );
+      descendants.push(queuedNodeInfo);
+      queue.push(
+        ...this.mapIdsToIdsWithDepth(
+          queuedNode.children,
+          queuedNodeInfo.depth + 1
+        )
+      );
     }
 
     return descendants;
@@ -94,5 +105,20 @@ export class NodeService {
     }
 
     return new NodeInfo(node.id, node.parent, depth, parentNode.id);
+  }
+
+  /**
+   * Map an array of ids into an array of ids paired with a fixed number
+   * @param ids
+   * @param depth
+   */
+  private mapIdsToIdsWithDepth(
+    ids: string[],
+    depth: number
+  ): Array<{ id: string; depth: number }> {
+    return ids.map((value) => ({
+      id: value,
+      depth: depth
+    }));
   }
 }

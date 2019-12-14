@@ -57,7 +57,9 @@ export class NodeRepository {
       if (parentId !== undefined) {
         const mongoParentNode = await NodeModel.findById(parentId);
         if (mongoParentNode === null) {
-          return Promise.reject(new NotFoundError(parentId));
+          return Promise.reject(
+            new NotFoundError(`invalid parent=${parentId}`)
+          );
         }
 
         mongoParentNode.children.push(mongoNode._id);
