@@ -96,9 +96,6 @@ export class NodeRepository {
   // TODO - Support setting the parent of a leaf node to undefined. The leaf node would
   //        become the new root and the old root would have the new root as it's parent.
 
-  // TODO - Move this method out to NodeService once transactions are supported on NodeRepository.
-  //        Without transaction support by NodeRepository the rollback on failure is not feasible.
-
   /**
    * Set the parent of nodeId to parentId.
    * @param nodeId
