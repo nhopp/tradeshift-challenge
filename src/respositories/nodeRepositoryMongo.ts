@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 
 import { Node } from '../../src/models/node';
 import { InvalidStructureError, NotFoundError } from '../errors';
+import { INodeRepository } from './inodeRepository';
 
 /**
  * Interface for the NodeModel document stored in MongoDB.
@@ -32,12 +33,7 @@ const NodeModel = mongoose.model<INodeModel>('nodeModel', NodeModelSchema);
 /**
  * Abstraction above the MongoDB storage.
  */
-export class NodeRepository {
-  /**
-   * Add a node as a child of parentId.
-   * @param parentId the parentId to the new node as a child of. If undefined the new node is a
-   * root node
-   */
+export class NodeRepository implements INodeRepository {
   public async addNode(parentId?: string): Promise<Node> {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -66,8 +62,7 @@ export class NodeRepository {
         await mongoParentNode.save();
       }
 
-      const node = this.mongoNodeToNode(mongoNode);
-      return node;
+      return this.mongoNodeToNode(mongoNode);
     } catch (err) {
       await session.abortTransaction();
       session.endSession();
@@ -75,20 +70,12 @@ export class NodeRepository {
     }
   }
 
-  /**
-   * Gets the node with identifier id.
-   * @param id identifier of the node to get.
-   * @return The node or undefined if no node is found.
-   */
   public async getNode(id: string): Promise<Node> {
     const mongoNode = await this.findNodeByIdOrReject(id);
 
     return this.mongoNodeToNode(mongoNode);
   }
 
-  /**
-   * Get the current number of nodes.
-   */
   public async getNodeCount(): Promise<number> {
     return await NodeModel.countDocuments();
   }
@@ -96,11 +83,6 @@ export class NodeRepository {
   // TODO - Support setting the parent of a leaf node to undefined. The leaf node would
   //        become the new root and the old root would have the new root as it's parent.
 
-  /**
-   * Set the parent of nodeId to parentId.
-   * @param nodeId
-   * @param parentId
-   */
   public async setParent(nodeId: string, parentId: string): Promise<Node> {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -130,8 +112,7 @@ export class NodeRepository {
       mongoNode.parent = newParent._id;
       await mongoNode.save();
 
-      const node = this.mongoNodeToNode(mongoNode);
-      return node;
+      return this.mongoNodeToNode(mongoNode);
     } catch (err) {
       await session.abortTransaction();
       session.endSession();

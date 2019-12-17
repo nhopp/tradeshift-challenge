@@ -1,36 +1,27 @@
 import chai from 'chai';
-import { Mockgoose } from 'mock-mongoose';
-import mongoose from 'mongoose';
+import { Pool } from 'pg';
 
 import { DuplicateRootError, InvalidArgumentError, InvalidStructureError, NotFoundError } from '../../src/errors';
-import { NodeRepository } from '../../src/respositories/nodeRepository';
+import { INodeRepository as NodeRepository } from '../../src/respositories/inodeRepository';
+import { NodeRepositoryPostgres } from '../../src/respositories/nodeRepositoryPostgres';
 import { NodeService } from '../../src/services/nodeService';
 
 const expect = chai.expect;
 
 describe('nodeService', () => {
-  const mockgoose = new Mockgoose(mongoose);
   let repository: NodeRepository;
   let service: NodeService;
 
-  before(async () => {
-    await mockgoose.prepareStorage();
-    await mongoose.connect('mongodb://localhost/express-mongo', {
-      useNewUrlParser: true,
-      useUnifiedTopology: true
+  beforeEach(async () => {
+    const pool = new Pool({
+      user: 'postgres',
+      password: 'postgres_pwd',
+      host: 'localhost',
+      database: 'postgres'
     });
-  });
-
-  after(async () => {
-    await mongoose.connection.close();
-  });
-
-  beforeEach(() => {
-    repository = new NodeRepository();
+    await pool.query<Node>('TRUNCATE node');
+    repository = new NodeRepositoryPostgres(pool);
     service = new NodeService(repository);
-  });
-  afterEach(async () => {
-    await mockgoose.helper.reset();
   });
 
   describe('addNode', () => {

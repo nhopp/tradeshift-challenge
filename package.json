@@ -14,11 +14,13 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@types/pg": "^7.11.2",
     "@types/uuid": "^3.4.6",
     "express": "^4.17.1",
     "mock-mongoose": "^7.4.0-r2",
     "mongoose": "^5.8.0",
     "nyc": "^14.1.1",
+    "pg": "^7.14.0",
     "ts-node": "^8.5.4",
     "typescript": "^3.7.3",
     "uuid": "^3.3.3"

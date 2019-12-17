@@ -1,36 +1,28 @@
 import chai from 'chai';
-import { Mockgoose } from 'mock-mongoose';
-import mongoose from 'mongoose';
+import { Pool } from 'pg';
 
 import { InvalidStructureError, NotFoundError } from '../../src/errors';
-import { NodeRepository } from '../../src/respositories/nodeRepository';
+import { INodeRepository } from '../../src/respositories/inodeRepository';
+import { NodeRepositoryPostgres } from '../../src/respositories/nodeRepositoryPostgres';
 
 const expect = chai.expect;
 
 describe('NodeRepository', () => {
-  const mockgoose = new Mockgoose(mongoose);
+  let repository: INodeRepository;
 
-  before(async () => {
-    await mockgoose.prepareStorage();
-    await mongoose.connect('mongodb://localhost/express-mongo', {
-      useNewUrlParser: true,
-      useUnifiedTopology: true
+  beforeEach(async () => {
+    const pool = new Pool({
+      user: 'postgres',
+      password: 'postgres_pwd',
+      host: 'localhost',
+      database: 'postgres'
     });
-  });
-
-  after(async () => {
-    await mongoose.connection.close();
-  });
-
-  afterEach((done) => {
-    mockgoose.helper.reset().then(() => {
-      done();
-    });
+    await pool.query<Node>('TRUNCATE node');
+    repository = new NodeRepositoryPostgres(pool);
   });
 
   describe('addNode()', () => {
     it('without parentId creates node with parent=undefined', async () => {
-      const repository = new NodeRepository();
       const node = await repository.addNode();
 
       expect(node).to.deep.eq({
@@ -41,7 +33,6 @@ describe('NodeRepository', () => {
     });
 
     it('with parentId creates node with parent=parentId', async () => {
-      const repository = new NodeRepository();
       const rootNode = await repository.addNode();
       const childNode = await repository.addNode(rootNode.id);
 
@@ -53,7 +44,6 @@ describe('NodeRepository', () => {
     });
 
     it('with valid parentId adds new node as child of parent', async () => {
-      const repository = new NodeRepository();
       const rootNode = await repository.addNode();
       const childNode = await repository.addNode(rootNode.id);
 
@@ -66,8 +56,7 @@ describe('NodeRepository', () => {
       });
     });
 
-    it('add node with invalid parentId promise rejects with InvalidNodeError', async () => {
-      const repository = new NodeRepository();
+    it('add node with invalid parentId promise rejects with NotFoundError', async () => {
       const addNodeError = await repository
         .addNode('invalidKey')
         .catch((err) => err);
@@ -77,14 +66,12 @@ describe('NodeRepository', () => {
   });
 
   describe('getNode()', () => {
-    it('invalid key returns undefined', async () => {
-      const repository = new NodeRepository();
+    it('invalid key returns NotFoundError', async () => {
       const error = await repository.getNode('invalidKey').catch((err) => err);
       expect(error).to.be.an.instanceof(NotFoundError);
     });
 
     it('valid key returns node', async () => {
-      const repository = new NodeRepository();
       const node = await repository.addNode();
       const fetchedNode = await repository.getNode(node.id);
       expect(node).to.deep.eq(fetchedNode);
@@ -93,14 +80,12 @@ describe('NodeRepository', () => {
 
   describe('getCount', () => {
     it('empty nodes return 0 count', async () => {
-      const repository = new NodeRepository();
       const count = await repository.getNodeCount();
 
       expect(count).to.be.eq(0);
     });
 
     it('single node return 1 count', async () => {
-      const repository = new NodeRepository();
       await repository.addNode();
       const count = await repository.getNodeCount();
 
@@ -112,7 +97,6 @@ describe('NodeRepository', () => {
     it('invalid nodeId rejects NotFoundError', async () => {
       const nodeId = 'invalidNodeId';
       const parentId = 'parentId';
-      const repository = new NodeRepository();
       const error = await repository
         .setParent(nodeId, parentId)
         .catch((err) => err);
@@ -121,12 +105,11 @@ describe('NodeRepository', () => {
     });
 
     it('cannot set parent of root rejects InvalidStructureError', async () => {
-      const invalidKey = 'invalidKey';
-      const repository = new NodeRepository();
       const root = await repository.addNode();
+      const child = await repository.addNode(root.id);
 
       const error = await repository
-        .setParent(root.id, invalidKey)
+        .setParent(root.id, child.id)
         .catch((err) => err);
 
       expect(error).is.an.instanceof(InvalidStructureError);
@@ -134,7 +117,6 @@ describe('NodeRepository', () => {
 
     it('invalid parentId rejects NotFoundError', async () => {
       const invalidKey = 'invalidKey';
-      const repository = new NodeRepository();
       const root = await repository.addNode();
       const child = await repository.addNode(root.id);
 
@@ -146,7 +128,6 @@ describe('NodeRepository', () => {
     });
 
     it('reparent grandchild to child or root', async () => {
-      const repository = new NodeRepository();
       const nodeA = await repository.addNode();
       const nodeB = await repository.addNode(nodeA.id);
       const nodeC = await repository.addNode(nodeB.id);

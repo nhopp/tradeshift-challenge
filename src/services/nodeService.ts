@@ -1,10 +1,10 @@
 import { DuplicateRootError, InvalidArgumentError, InvalidStructureError } from '../errors';
 import { Node } from '../models/node';
 import { NodeInfo } from '../models/nodeInfo';
-import { NodeRepository } from '../respositories/nodeRepository';
+import { INodeRepository } from '../respositories/inodeRepository';
 
 export class NodeService {
-  constructor(private repository: NodeRepository) {}
+  constructor(private repository: INodeRepository) {}
 
   /**
    * Add a node to the tree.

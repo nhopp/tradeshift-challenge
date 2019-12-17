@@ -9,9 +9,12 @@ services:
     ports:
       - 8080:8080
     links:
-      - mongo
-  mongo:
-    container_name: mongo
-    image: mongo
+      - postgres
+  postgres:
+    image: postgres:alpine
     ports:
-      - '27017:27017'
+      - '5432:5432'
+    environment:
+      POSTGRES_PASSWORD: postgres_pwd
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
