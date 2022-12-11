@@ -15,7 +15,7 @@
   "license": "ISC",
   "dependencies": {
     "@types/uuid": "^3.4.6",
-    "express": "^4.17.1",
+    "express": "^4.17.3",
     "mock-mongoose": "^7.4.0-r2",
     "mongoose": "^5.8.0",
     "nyc": "^14.1.1",
